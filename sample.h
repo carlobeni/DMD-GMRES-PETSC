@@ -5,16 +5,16 @@
 
 /* Estructura para almacenar la información del monitor */
 typedef struct {
-  Mat               Xview;       /* Matriz donde se almacenan los p vectores (secuencial) */
-  PetscInt          p;           /* Número de aproximaciones a almacenar */
-  PetscInt          count;       /* Cantidad de muestreos realizados */
-  PetscReal         tol;         /* Tolerancia para el método iterativo */
-  PetscReal         *residuals;  /* Array (de tamaño p) con las normas residuales */
-  PetscLogDouble   *iter_times; /* Array (de tamaño p) con el tiempo (por iteración) */
-  PetscLogDouble    t_start;     /* Tiempo de inicio del proceso */
-  PetscLogDouble    last_time;   /* Tiempo de la última iteración */
-  PetscInt          vecSize;     /* Tamaño global del vector solución (no se usa para el copiado) */
-} MonitorCtx;
+    // Matriz de soluciones por iteración
+    PetscScalar **Xsol; 
+    // Vector de normas de residuo por iteración
+    PetscReal *residuals;
+    // Tamaño de la matriz de soluciones
+    PetscInt size;
+    PetscInt max_iters;
+} SolutionStorage;
+
+PetscErrorCode CaptureMonitor(KSP ksp, PetscInt iter, PetscReal norm, void *ctx);
 
 PetscErrorCode SampleKSPIterations(KSP ksp,PetscInt m, Mat A, Vec b, Vec x0, PetscInt num_samples, PetscReal tol, Mat *Xsol);
 

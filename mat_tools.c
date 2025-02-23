@@ -334,9 +334,17 @@ PetscErrorCode ComputeSVD_slepcs(Mat A, Mat *U_out, Mat *S_out, Mat *V_out, Pets
     Mat U, S, VT;
     PetscInt m, n, k;
 
+    // Inicializar matrices de salida en NULL
+    *U_out = NULL;
+    *S_out = NULL;
+    *V_out = NULL;
+
     PetscCall(MatGetSize(A, &m, &n));
     PetscCall(SVDCreate(PETSC_COMM_WORLD, &svd));
     PetscCall(SVDSetOperators(svd, A, NULL));
+
+    // Establecer LAPACK para evitar errores en EPS
+    PetscCall(SVDSetType(svd, SVDLAPACK));
     PetscCall(SVDSetFromOptions(svd));
     PetscCall(SVDSolve(svd));
     PetscCall(SVDGetConverged(svd, &k));
@@ -356,9 +364,17 @@ PetscErrorCode ComputeSVD_slepcs(Mat A, Mat *U_out, Mat *S_out, Mat *V_out, Pets
         PetscCall(VecSetFromOptions(vt));
 
         PetscCall(SVDGetSingularTriplet(svd, i, &sigma, u, vt));
+
+        // Obtener tamaños de los vectores
+        PetscInt mu, nv;
+        PetscCall(VecGetSize(u, &mu));
+        PetscCall(VecGetSize(vt, &nv));
+
+        // Contar cuántos valores singulares son mayores al umbral
         if (sigma >= thresh)
             cont++;
-        // mostrar valores singulares
+
+        // Mostrar valores singulares
         PetscCall(VecDestroy(&u));
         PetscCall(VecDestroy(&vt));
     }
@@ -370,6 +386,10 @@ PetscErrorCode ComputeSVD_slepcs(Mat A, Mat *U_out, Mat *S_out, Mat *V_out, Pets
         PetscCall(SVDDestroy(&svd));
         return 1;
     }
+
+    // Si cont > k, ajustar a k
+    if (cont > k)
+        cont = k;
 
     // Crear matrices con las dimensiones ajustadas
     PetscCall(MatCreateDense(PETSC_COMM_WORLD, PETSC_DECIDE, PETSC_DECIDE, m, cont, NULL, &U));
@@ -422,8 +442,21 @@ PetscErrorCode ComputeSVD_slepcs(Mat A, Mat *U_out, Mat *S_out, Mat *V_out, Pets
     PetscCall(MatAssemblyBegin(VT, MAT_FINAL_ASSEMBLY));
     PetscCall(MatAssemblyEnd(VT, MAT_FINAL_ASSEMBLY));
 
-    //Transponer VT para obtener V
-    PetscCall(MatTranspose(VT, MAT_INITIAL_MATRIX, V_out));
+    // Transponer VT para obtener V
+    if (VT)
+    {
+        PetscCall(MatTranspose(VT, MAT_INITIAL_MATRIX, V_out));
+        if (!(*V_out))
+        {
+            PetscPrintf(PETSC_COMM_WORLD, "Error: MatTranspose falló.\n");
+            return 1;
+        }
+    }
+    else
+    {
+        PetscPrintf(PETSC_COMM_WORLD, "Error: VT es NULL antes de transponer.\n");
+        return 1;
+    }
 
     // Asignar las matrices de salida
     *U_out = U;
@@ -432,7 +465,9 @@ PetscErrorCode ComputeSVD_slepcs(Mat A, Mat *U_out, Mat *S_out, Mat *V_out, Pets
     // Liberar memoria
     PetscCall(SVDDestroy(&svd));
 
-    //PetscPrintf(PETSC_COMM_SELF, "SVD completed successfully.\n");
+    // Liberar VT después de usarla
+    if (VT)
+        PetscCall(MatDestroy(&VT));
 
     return 0;
 }

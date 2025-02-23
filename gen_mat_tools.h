@@ -3,6 +3,8 @@
 
 #include <petscksp.h>
 
-PetscErrorCode GenerateMatrixAndVector(PetscInt n, PetscScalar delta, PetscScalar const_min, PetscScalar const_max, Mat *A, Vec *b);
+PetscErrorCode GenZHONGAbn(PetscInt n, PetscScalar delta, PetscScalar const_min, PetscScalar const_max, Mat *A, Vec *b);
+
+PetscErrorCode GenZHONGAb(PetscScalar delta, Mat *A, Vec *b);
 
 #endif

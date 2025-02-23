@@ -32,6 +32,9 @@ def plot_norm_file(file_path):
     plt.ylabel('Norma Residual')
     plt.title(f"Convergencia - {os.path.basename(file_path)}")
     plt.legend()
+
+    # Establecer escala logarítmica en el eje Y
+    plt.yscale('log')
     
     output_file = os.path.splitext(file_path)[0] + ".png"
     plt.savefig(output_file, dpi=300, bbox_inches='tight')
@@ -95,11 +98,13 @@ def plot_table_file(file_path):
 
 def main():
     n = 4
+    delta = 1.5
+
     """ Busca y procesa archivos normR.txt y table.txt en la estructura de carpetas test/ZHONGn4/norm y test/ZHONGnX/table """
-    base_dirs = glob.glob(f"test/ZHONGn{n}/*")
+    base_dirs = glob.glob(f"test/ZHONGorig{n}_delta{delta}/*")
 
     if not base_dirs:
-        print(f"No se encontraron directorios en test/ZHONGn{n}/*")
+        print(f"No se encontraron directorios*")
         return
 
     norm_dir, table_dir = base_dirs

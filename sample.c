@@ -1,6 +1,32 @@
 #include "sample.h"
 #include <string.h> /* Para memcpy, si se desea usar */
 
+/* CaptureMonitor*/
+PetscErrorCode CaptureMonitor(KSP ksp, PetscInt iter, PetscReal norm, void *ctx)
+{
+  SolutionStorage *sol_storage = (SolutionStorage *)ctx;
+  Vec x;
+  const PetscScalar *x_array;
+
+  // Obtener el vector de solución en la iteración actual
+  PetscCall(KSPBuildSolution(ksp, NULL, &x));
+  PetscCall(VecGetArrayRead(x, &x_array));
+
+  if (iter < sol_storage->max_iters)
+  {
+    for (PetscInt i = 0; i < sol_storage->size; i++)
+    {
+      sol_storage->Xsol[i][iter] = x_array[i];
+    }
+    sol_storage->residuals[iter] = norm;
+  }
+
+  // Liberar memoria
+  PetscCall(VecRestoreArrayRead(x, &x_array));
+
+  return 0;
+}
+
 /*-----------------------------------------------------------
   SampleKSPIterations:
 
@@ -21,51 +47,85 @@
      Esto permite capturar el estado intermedio tras cada iteración.
      Se asegura además que el vector solución se trate como no nulo.
 -----------------------------------------------------------*/
-PetscErrorCode SampleKSPIterations(KSP ksp, PetscInt m, Mat A, Vec b, Vec x0, PetscInt num_samples, PetscReal tol, Mat *Xsol)
+PetscErrorCode SampleKSPIterations(KSP ksp, PetscInt m, Mat A, Vec b, Vec x0, PetscInt num_samples, PetscReal tolerance, Mat *Xsol)
 {
-  PetscErrorCode ierr;
-  PetscInt n, j, nlocal;
-  PetscMPIInt size;
-  PetscInt i;
+  PetscInt n;
   Vec x0_local;
-
   PetscCall(VecGetSize(x0, &n));
-  PetscCall(MPI_Comm_size(PETSC_COMM_WORLD, &size));
 
   // Configurar el ksp
+  PetscCall(KSPSetTolerances(ksp, tolerance, PETSC_DEFAULT, PETSC_DEFAULT, num_samples)); // itermax = num_samples
   PetscCall(KSPGMRESSetRestart(ksp, m));
   PetscCall(KSPSetInitialGuessNonzero(ksp, PETSC_TRUE));
-  PetscCall(KSPSetTolerances(ksp, tol, PETSC_DEFAULT, PETSC_DEFAULT, 1)); 
-
-  /* Crear la matriz para almacenar las aproximaciones: cada columna es una iteración */
-  PetscCall(MatCreateSeqDense(PETSC_COMM_SELF, n, num_samples, NULL, Xsol));
 
   /* Crear un vector local para x0 */
   PetscCall(VecDuplicate(x0, &x0_local));
   PetscCall(VecCopy(x0, x0_local));
 
-  for (i = 0; i < num_samples; i++)
-  {
-    // Resolver el sistema con el estado actualizado
-    PetscCall(KSPSolve(ksp, b, x0_local));
+  /* Crear la matriz para almacenar las aproximaciones: cada columna es una iteración */
+  PetscCall(MatCreateSeqDense(PETSC_COMM_SELF, n, num_samples, NULL, Xsol));
 
-    /* Almacenar la aproximación actual en la columna i de Xsol */
-    const PetscScalar *xarray;
-    PetscCall(VecGetArrayRead(x0_local, &xarray));
-    PetscCall(VecGetLocalSize(x0_local, &nlocal));
-    for (j = 0; j < nlocal; j++)
+  // Crear estructura para almacenar soluciones y normas de residuo
+  SolutionStorage sol_storage;
+  sol_storage.size = n;
+  sol_storage.max_iters = num_samples;
+  sol_storage.Xsol = (PetscScalar **)malloc(n * sizeof(PetscScalar *));
+  for (PetscInt i = 0; i < n; i++)
+    sol_storage.Xsol[i] = (PetscScalar *)malloc(num_samples * sizeof(PetscScalar));
+  sol_storage.residuals = (PetscReal *)malloc(num_samples * sizeof(PetscReal));
+  PetscCall(KSPMonitorSet(ksp, CaptureMonitor, (void *)&sol_storage, NULL));
+
+  /* Resolver el sistema con el estado actualizado */
+  PetscCall(KSPSolve(ksp, b, x0_local));
+
+  /* Cancelar monitor */
+  PetscCall(KSPMonitorCancel(ksp));
+
+  // Obtener numero de iteraciones para convergencia
+  PetscInt num_iters;
+  PetscCall(KSPGetIterationNumber(ksp, &num_iters));
+
+  /*
+  PetscPrintf(PETSC_COMM_WORLD, "Numero de iteraciones: %d\n", num_iters);
+  if (num_iters < num_samples-1)
+    PetscPrintf(PETSC_COMM_WORLD, "ADVERTENCIA: Convergencia en %d iteraciones\n", num_iters);
+
+  // Imprimir la matriz de resultados
+  PetscPrintf(PETSC_COMM_WORLD, "\nMatriz Xsol (soluciones por iteración):\n");
+  for (PetscInt i = 0; i < n; i++)
+  {
+    PetscPrintf(PETSC_COMM_WORLD, "Variable %d:", i);
+    for (PetscInt j = 0; j < num_iters; j++)
     {
-      PetscCall(MatSetValue(*Xsol, j, i, xarray[j], INSERT_VALUES));
+      PetscPrintf(PETSC_COMM_WORLD, " %g", (double)sol_storage.Xsol[i][j]);
     }
-    PetscCall(VecRestoreArrayRead(x0_local, &xarray));
+    PetscPrintf(PETSC_COMM_WORLD, "\n");
   }
 
-  /* Ensamblar la matriz con las aproximaciones */
+  // Imprimir la matriz de normas de residuos
+  PetscPrintf(PETSC_COMM_WORLD, "\nMatriz residuals (normas de residuo por iteración):\n");
+  for (PetscInt i = 0; i < num_iters; i++)
+  {
+    PetscPrintf(PETSC_COMM_WORLD, "Iter %d: %g\n", i+1, (double)sol_storage.residuals[i]);
+  }
+  */
+  // Cargar solo num_iters iteraciones
+  for (PetscInt i = 0; i < n; i++)
+  {
+    for (PetscInt j = 0; j < num_iters; j++)
+      PetscCall(MatSetValue(*Xsol, i, j, sol_storage.Xsol[i][j], INSERT_VALUES));
+  }
+
+  // Ensamblar matriz
   PetscCall(MatAssemblyBegin(*Xsol, MAT_FINAL_ASSEMBLY));
   PetscCall(MatAssemblyEnd(*Xsol, MAT_FINAL_ASSEMBLY));
 
   /* Liberar recursos */
   VecDestroy(&x0_local);
+  for (PetscInt i = 0; i < n; i++)
+    free(sol_storage.Xsol[i]);
+  free(sol_storage.Xsol);
+  free(sol_storage.residuals);
 
   return 0;
 }

@@ -10,32 +10,19 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-// Función para generar la matriz A y el vector b
-PetscErrorCode GenerarMatrizYVector(PetscInt n, PetscScalar delta, Mat *A, Vec *b)
-{
-    PetscFunctionBegin;
-    PetscScalar const_min = 0.1, const_max = 2.0;
-    PetscCall(GenerateMatrixAndVector(n, delta, const_min, const_max, A, b));
-    PetscFunctionReturn(0);
-}
-
 // Función para configurar el solucionador KSP
 PetscErrorCode ConfigurarKSP(Mat A, KSP *ksp)
 {
-    PetscFunctionBegin;
     PC pc;
-    PetscReal tol = 1e-5;
-    char solverType[PETSC_MAX_PATH_LEN] = KSPGMRES;
-    char preconditionerType[PETSC_MAX_PATH_LEN] = PCNONE;
+    char solverType[PETSC_MAX_PATH_LEN] = "gmres";
+    char preconditionerType[PETSC_MAX_PATH_LEN] = "none";
 
     PetscCall(KSPCreate(PETSC_COMM_WORLD, ksp));
     PetscCall(KSPSetOperators(*ksp, A, A));
     PetscCall(KSPSetType(*ksp, solverType));
-    PetscCall(KSPSetTolerances(*ksp, tol, PETSC_DEFAULT, PETSC_DEFAULT, PETSC_DEFAULT));
     PetscCall(KSPGetPC(*ksp, &pc));
     PetscCall(PCSetType(pc, preconditionerType));
     PetscCall(KSPSetFromOptions(*ksp));
-    PetscFunctionReturn(0);
 }
 
 // Función para crear directorios si no existen
@@ -49,11 +36,14 @@ void CrearDirectorioSiNoExiste(const char *path)
 }
 
 // Función para ejecutar los bucles principales
-PetscErrorCode EjecutarBuclesPrincipales(PetscInt n, PetscScalar delta, PetscInt m_max, PetscInt p_max, PetscScalar thresh, PetscReal tol, PetscInt tau, PetscInt kkmax)
+PetscErrorCode EjecutarBuclesPrincipales(char *label, Mat A, Vec b, PetscInt m_max, PetscInt p_max, PetscScalar thresh, PetscReal tol, PetscInt tau, PetscInt kkmax)
 {
+    PetscInt n;
+    PetscCall(MatGetSize(A, &n, NULL));
+
     PetscFunctionBegin;
     char basePath[PETSC_MAX_PATH_LEN];
-    snprintf(basePath, sizeof(basePath), "test/ZHONGn%d", n);
+    snprintf(basePath, sizeof(basePath), "test/%s", label);
 
     // Crear directorios necesarios
     char normDir[PETSC_MAX_PATH_LEN], tableDir[PETSC_MAX_PATH_LEN];
@@ -65,28 +55,25 @@ PetscErrorCode EjecutarBuclesPrincipales(PetscInt n, PetscScalar delta, PetscInt
     CrearDirectorioSiNoExiste(normDir);
     CrearDirectorioSiNoExiste(tableDir);
 
-    // Generar matriz A y vector b
-    Mat A;
-    Vec b;
-    PetscCall(GenerarMatrizYVector(n, delta, &A, &b));
-
     // Configurar KSP
     KSP ksp;
     PetscCall(ConfigurarKSP(A, &ksp));
 
-    // Vector de inicialización x0 = b
+    // Vector de inicialización x0 = vecto nulo
     Vec x0;
-    PetscCall(VecDuplicate(b, &x0));
-    PetscCall(VecCopy(b, x0));
+    PetscCall(VecDuplicate(b, &x0)); // x0 = b
+    PetscCall(VecSet(x0, 0.0));      // x0 = 0
 
     // Bucle principal
-    for (PetscInt m = 1; m <= m_max; ++m)
+    for (PetscInt m = 2; m <= m_max; ++m)
     {
         for (PetscInt p = 2; p <= p_max; ++p)
         {
             // Muestrear soluciones con SampleKSPIterations
             Mat X_gmres;
             PetscCall(SampleKSPIterations(ksp, m, A, b, x0, kkmax * p, tol, &X_gmres));
+            // Show X_gmres
+            //PetscCall(MatView(X_gmres, PETSC_VIEWER_STDOUT_WORLD));
 
             // Muestrear soluciones con calculateDMDcWin
             Mat X_dmdc;
@@ -94,12 +81,12 @@ PetscErrorCode EjecutarBuclesPrincipales(PetscInt n, PetscScalar delta, PetscInt
 
             // Calcular y almacenar normas residuales
             char normFile[PETSC_MAX_PATH_LEN];
-            snprintf(normFile, sizeof(normFile), "%s/ZHONGn%d_normR_m%d_p%d_delta%.1f.txt", normDir, n, m, p, delta);
+            snprintf(normFile, sizeof(normFile), "%s/%s_normR_m%d_p%d.txt", normDir, label, m, p);
             FILE *normFp = fopen(normFile, "w");
             if (!normFp)
                 SETERRQ(PETSC_COMM_SELF, PETSC_ERR_FILE_OPEN, "No se pudo abrir el archivo para escribir las normas residuales");
 
-            for (PetscInt k = 0; k < kkmax*p; ++k)
+            for (PetscInt k = 0; k < kkmax * p; ++k)
             {
                 Vec x_dmdc_k, x_gmres_k, res_dmdc, res_gmres;
                 // Inicializar los vectores
@@ -145,7 +132,7 @@ PetscErrorCode EjecutarBuclesPrincipales(PetscInt n, PetscScalar delta, PetscInt
 
             // Almacenar la norma de la diferencia en un archivo
             char tableFile[PETSC_MAX_PATH_LEN];
-            snprintf(tableFile, sizeof(tableFile), "%s/ZHONGn%d_table_mmax%d_pmax%d_delta%.1f.txt", tableDir, n, m_max, p_max, delta);
+            snprintf(tableFile, sizeof(tableFile), "%s/%s_table_mmax%d_pmax%d.txt", tableDir, label, m_max, p_max);
             FILE *tableFp = fopen(tableFile, "a");
             if (!tableFp)
                 SETERRQ(PETSC_COMM_SELF, PETSC_ERR_FILE_OPEN, "No se pudo abrir el archivo para escribir la tabla");
@@ -169,18 +156,27 @@ PetscErrorCode EjecutarBuclesPrincipales(PetscInt n, PetscScalar delta, PetscInt
 int main(int argc, char **argv)
 {
     PetscCall(SlepcInitialize(&argc, &argv, NULL, "Uso: ./programa\n"));
-    PetscInt n = 4; // Tamaño de la matriz
-    PetscScalar delta = 1.3; // Perturbación de la diagonal de la matriz
-    PetscInt m_max = 4; 
-    PetscInt p_max = 4;
+    PetscInt m_max = 3;
+    PetscInt p_max = 40;
 
     // Parámetros de ventanas
-    PetscScalar thresh = 1e-2; // Umbral para SVD
-    PetscReal tol = 1e-5; // Tolerancia para GMRES
+    PetscScalar thresh = 1e-15; // Umbral para SVD
+    PetscReal tol = 1e-15;      // Tolerancia para GMRES
     PetscInt tau = 0;
-    PetscInt kkmax = 10; // Numero de ventanas
+    PetscInt kkmax = 3; // Numero de ventanas
 
-    PetscCall(EjecutarBuclesPrincipales(n, delta, m_max, p_max, thresh, tol, tau, kkmax));
+    // Generar matriz A y vector b
+    Mat A;
+    Vec b;
+    PetscInt n = 4;
+    PetscScalar delta = 1.5;
+    PetscCall(GenZHONGAb(delta, &A, &b));
+    // Mostrar matriz y vector
+    PetscCall(MatView(A, PETSC_VIEWER_STDOUT_WORLD));
+    PetscCall(VecView(b, PETSC_VIEWER_STDOUT_WORLD));
+    char label[PETSC_MAX_PATH_LEN];
+    snprintf(label, sizeof(label), "ZHONGorig%d_delta%.1f", n, delta);
+    PetscCall(EjecutarBuclesPrincipales(label, A, b, m_max, p_max, thresh, tol, tau, kkmax));
     PetscCall(SlepcFinalize());
     return 0;
 }
