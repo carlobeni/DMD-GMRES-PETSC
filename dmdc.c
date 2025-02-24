@@ -98,7 +98,7 @@ PetscErrorCode DMDc(Mat StateData, PetscInt m, Mat InputData, PetscInt tau, Pets
   PetscCall(MatGetSize(approxB, &n_approx_B, NULL));
   PetscCall(VecCreateSeq(PETSC_COMM_SELF, n_approx_B, &vec_approx_B));
   PetscCall(MatGetColumnVector(approxB, vec_approx_B, 0));
-  PetscCall(VecScale(vec_approx_B, m));
+  PetscCall(VecScale(vec_approx_B, 0));
 
   // Construir Xtil
   Mat Xtil;
