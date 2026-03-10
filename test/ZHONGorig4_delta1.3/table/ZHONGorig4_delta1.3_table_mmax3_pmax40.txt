@@ -1,0 +1,17 @@
+m = 2, p = 2: Norma de la diferencia = 1.43831
+m = 2, p = 3: Norma de la diferencia = 1.05386
+m = 2, p = 4: Norma de la diferencia = 1.58438
+m = 2, p = 5: Norma de la diferencia = 197.945
+m = 2, p = 6: Norma de la diferencia = 34.4116
+m = 2, p = 7: Norma de la diferencia = 1.7069
+m = 2, p = 8: Norma de la diferencia = 22760.7
+m = 2, p = 9: Norma de la diferencia = 5.18144e+13
+m = 2, p = 10: Norma de la diferencia = 78.2388
+m = 2, p = 11: Norma de la diferencia = 1959.91
+m = 2, p = 12: Norma de la diferencia = 3.97425e+21
+m = 2, p = 13: Norma de la diferencia = 1.01547e+15
+m = 2, p = 14: Norma de la diferencia = 4.64181e+11
+m = 2, p = 15: Norma de la diferencia = 1.38169e+37
+m = 2, p = 16: Norma de la diferencia = 2.06083e+19
+m = 2, p = 17: Norma de la diferencia = 1.36023e+55
+m = 2, p = 18: Norma de la diferencia = 1.10453e+209

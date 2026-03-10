@@ -272,6 +272,80 @@ PetscErrorCode CopyMatrixbyBlock(Mat A, Mat *B, PetscInt x1, PetscInt y1, PetscI
 
     return 0;
 }
+#include <petsc.h>
+/**
+ * @brief Separa la matriz X_dmdc en X_dmdc_p y X_dmdc_tau.
+ * 
+ * @param X_dmdc Matriz de entrada con dimensiones (n, (p+tau)*kkmax).
+ * @param p Número de columnas a extraer en X_dmdc_p por ventana.
+ * @param tau Número de columnas τ a extraer en X_dmdc_tau por ventana.
+ * @param kkmax Número de ventanas en X_dmdc.
+ * @param X_dmdc_p Matriz de salida (n, p*kkmax) con las columnas p de cada ventana.
+ * @param X_dmdc_tau Matriz de salida (n, p*kkmax+tau) donde se guardan las columnas τ 
+ *                   de cada ventana, ubicándolas en las posiciones p, 2p, 3p, ...; el resto se llena con 0.
+ * 
+ * @return PetscErrorCode Código de error de PETSc.
+ */
+PetscErrorCode separateXdmdc(Mat X_dmdc, PetscInt p, PetscInt tau, PetscInt kkmax, Mat *X_dmdc_p, Mat *X_dmdc_tau) {
+    PetscInt n, totalCols;
+    PetscFunctionBeginUser;
+    
+    // Obtener dimensiones de X_dmdc
+    PetscCall(MatGetSize(X_dmdc, &n, &totalCols));
+    
+    // Dimensiones de las matrices de salida
+    PetscInt pCols   = p * kkmax;         // p columnas por ventana en X_dmdc_p
+    PetscInt tauCols = p * kkmax + tau;     // En X_dmdc_tau se reservarán bloques de p columnas y luego se cargan τ columnas
+
+    // Crear y configurar X_dmdc_p
+    PetscCall(MatCreate(PETSC_COMM_WORLD, X_dmdc_p));
+    PetscCall(MatSetSizes(*X_dmdc_p, PETSC_DECIDE, PETSC_DECIDE, n, pCols));
+    PetscCall(MatSetType(*X_dmdc_p, MATDENSE));
+    PetscCall(MatSetUp(*X_dmdc_p));
+
+    // Crear y configurar X_dmdc_tau
+    PetscCall(MatCreate(PETSC_COMM_WORLD, X_dmdc_tau));
+    PetscCall(MatSetSizes(*X_dmdc_tau, PETSC_DECIDE, PETSC_DECIDE, n, tauCols));
+    PetscCall(MatSetType(*X_dmdc_tau, MATDENSE));
+    PetscCall(MatSetUp(*X_dmdc_tau));
+
+    // Obtener el array de la matriz de entrada (almacenada en formato columna mayor)
+    PetscScalar *x_dmdc_array;
+    PetscCall(MatDenseGetArray(X_dmdc, &x_dmdc_array));
+
+    // Para cada ventana k
+    for (PetscInt k = 0; k < kkmax; k++) {
+        // En la matriz de entrada, cada ventana ocupa (p + tau) columnas.
+        PetscInt startIdx = k * (p + tau);
+
+        // --- Copiar las p columnas para X_dmdc_p ---
+        for (PetscInt j = 0; j < p; j++) {
+            for (PetscInt i = 0; i < n; i++) {
+                PetscScalar value = x_dmdc_array[i + (startIdx + j)*n];
+                PetscCall(MatSetValue(*X_dmdc_p, i, k * p + j, value, INSERT_VALUES));
+            }
+        }
+         for (PetscInt j = 0; j < tau; j++) {
+            for (PetscInt i = 0; i < n; i++) {
+                PetscScalar value = x_dmdc_array[i + (startIdx + p + j)*n];
+                PetscCall(MatSetValue(*X_dmdc_tau, i, k * p + p + j, value, INSERT_VALUES));
+            }
+        }
+    }
+
+    // Restaurar el array de X_dmdc
+    PetscCall(MatDenseRestoreArray(X_dmdc, &x_dmdc_array));
+
+    // Ensamblar las matrices
+    PetscCall(MatAssemblyBegin(*X_dmdc_p, MAT_FINAL_ASSEMBLY));
+    PetscCall(MatAssemblyEnd(*X_dmdc_p, MAT_FINAL_ASSEMBLY));
+    PetscCall(MatAssemblyBegin(*X_dmdc_tau, MAT_FINAL_ASSEMBLY));
+    PetscCall(MatAssemblyEnd(*X_dmdc_tau, MAT_FINAL_ASSEMBLY));
+
+    PetscFunctionReturn(0);
+}
+
+
 /*
     ComputeDiagonalInverse:
     Calcula la inversa de la diagonal de una matriz A y la guarda en una nueva matriz.

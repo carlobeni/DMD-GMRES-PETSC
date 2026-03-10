@@ -1,0 +1,6 @@
+Iteración 4: Norma Residual DMDctau = 4.58993
+Iteración 5: Norma Residual DMDctau = 4.58993
+Iteración 6: Norma Residual DMDctau = 4.58993
+Iteración 7: Norma Residual DMDctau = 4.58993
+Iteración 8: Norma Residual DMDctau = 4.58993
+Iteración 9: Norma Residual DMDctau = 4.58993

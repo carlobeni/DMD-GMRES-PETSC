@@ -90,7 +90,7 @@ PetscErrorCode DMDc(Mat StateData, PetscInt m, Mat InputData, PetscInt tau, Pets
   // Multiplicar A4 por U2'
   PetscCall(MatMatMult(A4, U2t, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &approxB));
   // Mostar approxB
-  PetscCall(MatView(approxB, PETSC_VIEWER_STDOUT_WORLD));
+  // PetscCall(MatView(approxB, PETSC_VIEWER_STDOUT_WORLD));
 
   // Para approxB * u;
   Vec vec_approx_B; // Convertir approxB en vector
@@ -98,7 +98,7 @@ PetscErrorCode DMDc(Mat StateData, PetscInt m, Mat InputData, PetscInt tau, Pets
   PetscCall(MatGetSize(approxB, &n_approx_B, NULL));
   PetscCall(VecCreateSeq(PETSC_COMM_SELF, n_approx_B, &vec_approx_B));
   PetscCall(MatGetColumnVector(approxB, vec_approx_B, 0));
-  PetscCall(VecScale(vec_approx_B, 0));
+  PetscCall(VecScale(vec_approx_B, m));
 
   // Construir Xtil
   Mat Xtil;
@@ -241,8 +241,6 @@ PetscErrorCode calculateDMDcWin(KSP ksp, PetscInt m, Mat A, Vec b, Vec x0, Petsc
         }
       }
       PetscCall(MatDenseRestoreArray(Xwin, &win_array));
-      //Mensaje de Ventana Cargada
-      PetscPrintf(PETSC_COMM_SELF, "Ventana %d cargada.\n", kk+1);
     }
 
     PetscCall(MatDestroy(&Xsol));

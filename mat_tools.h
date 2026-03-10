@@ -19,4 +19,6 @@ PetscErrorCode ComputeDiagonalInverse(Mat A, Mat *A_inv);
 
 PetscErrorCode ComputeSVD_slepcs(Mat A, Mat *U_out, Mat *S_out, Mat *V_out,PetscReal thresh);
 
+PetscErrorCode separateXdmdc(Mat X_dmdc, PetscInt p, PetscInt tau, PetscInt kkmax, Mat *X_dmdc_p, Mat *X_dmdc_tau);
+
 #endif

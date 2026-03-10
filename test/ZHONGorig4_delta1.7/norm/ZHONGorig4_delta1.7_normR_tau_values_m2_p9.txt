@@ -1,0 +1,8 @@
+Iteración 10: Norma Residual DMDctau = 276.602
+Iteración 11: Norma Residual DMDctau = 576.753
+Iteración 19: Norma Residual DMDctau = 232749
+Iteración 20: Norma Residual DMDctau = 788528
+Iteración 28: Norma Residual DMDctau = 2.81459e+23
+Iteración 29: Norma Residual DMDctau = 1.37958e+26
+Iteración 37: Norma Residual DMDctau = 3.10985e+35
+Iteración 38: Norma Residual DMDctau = 3.32102e+39

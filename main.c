@@ -63,6 +63,7 @@ PetscErrorCode EjecutarBuclesPrincipales(char *label, Mat A, Vec b, PetscInt m_m
     Vec x0;
     PetscCall(VecDuplicate(b, &x0)); // x0 = b
     PetscCall(VecSet(x0, 0.0));      // x0 = 0
+    //PetscCall(VecCopy(b, x0));
 
     // Bucle principal
     for (PetscInt m = 2; m <= m_max; ++m)
@@ -73,12 +74,15 @@ PetscErrorCode EjecutarBuclesPrincipales(char *label, Mat A, Vec b, PetscInt m_m
             Mat X_gmres;
             PetscCall(SampleKSPIterations(ksp, m, A, b, x0, kkmax * p, tol, &X_gmres));
             // Show X_gmres
-            //PetscCall(MatView(X_gmres, PETSC_VIEWER_STDOUT_WORLD));
+            // PetscCall(MatView(X_gmres, PETSC_VIEWER_STDOUT_WORLD));
 
             // Muestrear soluciones con calculateDMDcWin
             Mat X_dmdc;
             PetscCall(calculateDMDcWin(ksp, m, A, b, x0, tol, p, tau, kkmax, thresh, &X_dmdc));
-
+            // Separa X_dmdcp en X_dmdcp_p y X_dmdcp_tau
+            Mat X_dmdcp, X_dmdctau;
+            PetscCall(separateXdmdc(X_dmdc, p, tau, kkmax, &X_dmdcp, &X_dmdctau));
+            // Calcular y almacenar normas las p aproximaciones del DMDc y el GMRES
             // Calcular y almacenar normas residuales
             char normFile[PETSC_MAX_PATH_LEN];
             snprintf(normFile, sizeof(normFile), "%s/%s_normR_m%d_p%d.txt", normDir, label, m, p);
@@ -88,15 +92,15 @@ PetscErrorCode EjecutarBuclesPrincipales(char *label, Mat A, Vec b, PetscInt m_m
 
             for (PetscInt k = 0; k < kkmax * p; ++k)
             {
-                Vec x_dmdc_k, x_gmres_k, res_dmdc, res_gmres;
+                Vec x_dmdcp_k, x_gmres_k, res_dmdcp, res_gmres;
                 // Inicializar los vectores
-                PetscCall(VecDuplicate(b, &x_dmdc_k));
+                PetscCall(VecDuplicate(b, &x_dmdcp_k));
                 PetscCall(VecDuplicate(b, &x_gmres_k));
-                PetscCall(VecDuplicate(b, &res_dmdc));
+                PetscCall(VecDuplicate(b, &res_dmdcp));
                 PetscCall(VecDuplicate(b, &res_gmres));
-                PetscCall(MatGetColumnVector(X_dmdc, x_dmdc_k, k));
+                PetscCall(MatGetColumnVector(X_dmdcp, x_dmdcp_k, k));
                 PetscCall(MatGetColumnVector(X_gmres, x_gmres_k, k));
-                PetscCall(VecDuplicate(b, &res_dmdc));
+                PetscCall(VecDuplicate(b, &res_dmdcp));
                 PetscCall(VecDuplicate(b, &res_gmres));
 
                 // Calcular residuales gmres
@@ -104,28 +108,63 @@ PetscErrorCode EjecutarBuclesPrincipales(char *label, Mat A, Vec b, PetscInt m_m
                 PetscCall(VecAXPY(res_gmres, -1.0, b));
 
                 // Calcular residuales dmdc
-                PetscCall(MatMult(A, x_dmdc_k, res_dmdc));
-                PetscCall(VecAXPY(res_dmdc, -1.0, b));
+                PetscCall(MatMult(A, x_dmdcp_k, res_dmdcp));
+                PetscCall(VecAXPY(res_dmdcp, -1.0, b));
 
                 // Calcular normas de los residuales
-                PetscReal norm_res_dmdc, norm_res_gmres;
-                PetscCall(VecNorm(res_dmdc, NORM_2, &norm_res_dmdc));
+                PetscReal norm_res_dmdcp, norm_res_gmres;
+                PetscCall(VecNorm(res_dmdcp, NORM_2, &norm_res_dmdcp));
                 PetscCall(VecNorm(res_gmres, NORM_2, &norm_res_gmres));
 
                 // Escribir las normas en el archivo
-                fprintf(normFp, "Iteración %d: Norma Residual DMDc = %g, Norma Residual GMRES = %g\n", k + 1, (double)norm_res_dmdc, (double)norm_res_gmres);
+                fprintf(normFp, "Iteración %d: Norma Residual DMDc = %g, Norma Residual GMRES = %g\n", k + 1, (double)norm_res_dmdcp, (double)norm_res_gmres);
 
                 // Liberar recursos
-                PetscCall(VecDestroy(&x_dmdc_k));
+                PetscCall(VecDestroy(&x_dmdcp_k));
                 PetscCall(VecDestroy(&x_gmres_k));
-                PetscCall(VecDestroy(&res_dmdc));
+                PetscCall(VecDestroy(&res_dmdcp));
                 PetscCall(VecDestroy(&res_gmres));
             }
             fclose(normFp);
 
-            // Calcular la norma de la diferencia entre X_dmdc y X_gmres
+            // Calcular y almacenar normas las tau aproximaciones del DMDc, debe ser con paso
+            char normDMDctauFile[PETSC_MAX_PATH_LEN];
+            snprintf(normDMDctauFile, sizeof(normDMDctauFile), "%s/%s_normR_tau_values_m%d_p%d.txt", normDir, label, m, p, tau);
+            FILE *normDMDctauFp = fopen(normDMDctauFile, "w");
+            if (!normDMDctauFp)
+                SETERRQ(PETSC_COMM_SELF, PETSC_ERR_FILE_OPEN, "No se pudo abrir el archivo para escribir las normas DMDctau");
+            PetscInt k = p;
+            PetscInt cont = 0;
+            while (k < p * kkmax + tau)
+            {
+                Vec x_dmdctau_k, res_dmdctau;
+                // Inicializar los vectores
+                PetscCall(VecDuplicate(b, &x_dmdctau_k));
+                PetscCall(VecDuplicate(b, &res_dmdctau));
+                PetscCall(MatGetColumnVector(X_dmdctau, x_dmdctau_k, k));
+                PetscCall(MatMult(A, x_dmdctau_k, res_dmdctau));
+                PetscCall(VecAXPY(res_dmdctau, -1.0, b));
+                // Calcular normas de los residuales
+                PetscReal norm_res_dmdctau;
+                PetscCall(VecNorm(res_dmdctau, NORM_2, &norm_res_dmdctau));
+                // Escribir las normas en el archivo
+                fprintf(normDMDctauFp, "Iteración %d: Norma Residual DMDctau = %g\n", k + 1, (double)norm_res_dmdctau);
+                // Liberar recursos
+                PetscCall(VecDestroy(&x_dmdctau_k));
+                PetscCall(VecDestroy(&res_dmdctau));
+                cont++;
+                if (cont == tau)
+                {
+                    k = k + (p-tau);
+                    cont = 0;
+                }
+                k = k + 1;
+            }
+            fclose(normDMDctauFp);
+
+            // Calcular la norma de la diferencia entre X_dmdcp y X_gmres
             Mat X_diff;
-            PetscCall(MatDuplicate(X_dmdc, MAT_COPY_VALUES, &X_diff));
+            PetscCall(MatDuplicate(X_dmdcp, MAT_COPY_VALUES, &X_diff));
             PetscCall(MatAXPY(X_diff, -1.0, X_gmres, DIFFERENT_NONZERO_PATTERN));
             PetscReal norm_X_diff;
             PetscCall(MatNorm(X_diff, NORM_1, &norm_X_diff));
@@ -141,16 +180,16 @@ PetscErrorCode EjecutarBuclesPrincipales(char *label, Mat A, Vec b, PetscInt m_m
 
             // Liberar recursos
             PetscCall(MatDestroy(&X_gmres));
-            PetscCall(MatDestroy(&X_dmdc));
+            PetscCall(MatDestroy(&X_dmdcp));
             PetscCall(MatDestroy(&X_diff));
         }
-    }
 
-    // Liberar recursos
-    PetscCall(KSPDestroy(&ksp));
-    PetscCall(MatDestroy(&A));
-    PetscCall(VecDestroy(&b));
-    PetscCall(VecDestroy(&x0));
+        // Liberar recursos
+        PetscCall(KSPDestroy(&ksp));
+        PetscCall(MatDestroy(&A));
+        PetscCall(VecDestroy(&b));
+        PetscCall(VecDestroy(&x0));
+    }
 }
 
 int main(int argc, char **argv)
@@ -162,15 +201,16 @@ int main(int argc, char **argv)
     // Parámetros de ventanas
     PetscScalar thresh = 1e-15; // Umbral para SVD
     PetscReal tol = 1e-15;      // Tolerancia para GMRES
-    PetscInt tau = 0;
-    PetscInt kkmax = 3; // Numero de ventanas
+    PetscInt tau = 2;
+    PetscInt kkmax = 4; // Numero de ventanas
 
     // Generar matriz A y vector b
     Mat A;
     Vec b;
     PetscInt n = 4;
-    PetscScalar delta = 1.5;
+    PetscScalar delta = 1.67;
     PetscCall(GenZHONGAb(delta, &A, &b));
+    //PetscCall(GenZHONGAbn(n, delta, 1, 2, &A, &b));
     // Mostrar matriz y vector
     PetscCall(MatView(A, PETSC_VIEWER_STDOUT_WORLD));
     PetscCall(VecView(b, PETSC_VIEWER_STDOUT_WORLD));

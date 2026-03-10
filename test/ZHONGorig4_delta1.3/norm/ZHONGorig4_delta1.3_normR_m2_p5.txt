@@ -1,0 +1,15 @@
+Iteración 1: Norma Residual DMDc = 6.30362, Norma Residual GMRES = 6.30362
+Iteración 2: Norma Residual DMDc = 0.2939, Norma Residual GMRES = 1.22139
+Iteración 3: Norma Residual DMDc = 0.502721, Norma Residual GMRES = 0.297819
+Iteración 4: Norma Residual DMDc = 0.212108, Norma Residual GMRES = 0.265423
+Iteración 5: Norma Residual DMDc = 0.244476, Norma Residual GMRES = 0.214506
+Iteración 6: Norma Residual DMDc = 0.214506, Norma Residual GMRES = 0.140898
+Iteración 7: Norma Residual DMDc = 1.15266, Norma Residual GMRES = 0.107471
+Iteración 8: Norma Residual DMDc = 3.65197, Norma Residual GMRES = 0.0555743
+Iteración 9: Norma Residual DMDc = 10.3142, Norma Residual GMRES = 0.00748354
+Iteración 10: Norma Residual DMDc = 28.9929, Norma Residual GMRES = 0.00644225
+Iteración 11: Norma Residual DMDc = 0.00748354, Norma Residual GMRES = 0.00560049
+Iteración 12: Norma Residual DMDc = 0.0730806, Norma Residual GMRES = 0.00395194
+Iteración 13: Norma Residual DMDc = 0.684638, Norma Residual GMRES = 0.00281926
+Iteración 14: Norma Residual DMDc = 6.45381, Norma Residual GMRES = 0.00112199
+Iteración 15: Norma Residual DMDc = 60.9129, Norma Residual GMRES = 0.00032489
